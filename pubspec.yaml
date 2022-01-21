@@ -1,0 +1,19 @@
+name: args_simple
+description: a simple argument parser and handler, integrated with JSON and dart:io.
+version: 1.0.0
+homepage: https://github.com/gmpassos/args_simple
+
+environment:
+  sdk: '>=2.14.0 <3.0.0'
+
+
+dependencies:
+   path: ^1.8.0
+   yaml: ^3.1.0
+
+dev_dependencies:
+  lints: ^1.0.0
+  test: ^1.16.0
+  dependency_validator: ^3.1.2
+  coverage: ^1.0.3
+  pubspec: ^2.0.1
