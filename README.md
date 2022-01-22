@@ -45,14 +45,14 @@ void main(List<String> _args) {
           ? args.argumentAsFileContentJSON(0)!
           : {};
 
-  // Argument #1 is an optional `String`:
+  // Argument #1 is an optional `String`, with `guest` as default:
   var user = args.argumentAsString(1, 'guest');
 
-  // Option `sys-config` is a `Directory`:
+  // Option `sys-config` is a `Directory`, with `/default/sys-config-dir` as default:
   var systemConfigDir = args.optionAsDirectory(
           'sys-config', Directory('/default/sys-config-dir'))!;
 
-  // Option `--port` is a `int`, with 8080 as default:
+  // Option `--port` is an `int`, with 8080 as default:
   var port = args.optionAsInt('port', 8080);
 
   // Check for flag `-verbose`:
@@ -61,7 +61,7 @@ void main(List<String> _args) {
   if (verbose) {
     print('-- Config: $config');
     print('-- User: $user');
-    print('-- System Config Dir: $systemConfigDir');
+    print('-- System-Config Dir: $systemConfigDir');
     print('-- Port: $port');
     print('-- Verbose: $verbose');
     print(args);
