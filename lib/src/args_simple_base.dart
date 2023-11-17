@@ -191,10 +191,18 @@ class ArgsSimple {
 
   void addFlag(String key) => _flags.add(normalizeKey(key));
 
-  bool flag<T>(String key, [T? def, TypeElementParser? parser]) {
+  bool flag<T>(String key) {
     if (_flags.contains(key)) return true;
     var keyLC = normalizeKey(key);
     return _flags.contains(keyLC);
+  }
+
+  bool? flagOr<T>(String key, bool? def) {
+    if (_flags.contains(key)) return true;
+    var keyLC = normalizeKey(key);
+    var found = _flags.contains(keyLC);
+    if (found) return true;
+    return def;
   }
 
   void putProperty(String key, Object value) =>

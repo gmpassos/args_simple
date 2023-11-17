@@ -1,4 +1,7 @@
-## 1.0.1
+## 1.1.0
+
+- `ArgsSimple`:
+  - Added `flagOr`.
 
 - sdk: '>=3.0.0 <4.0.0'
 - collection: ^1.18.0
