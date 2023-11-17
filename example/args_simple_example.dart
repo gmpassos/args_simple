@@ -7,8 +7,8 @@ import 'package:args_simple/args_simple_io.dart';
 /// - `/path/config.json --port 81 -verbose`
 /// - `/path/config.json -verbose --sys-config /my/sys-config-dir`
 /// - `/path/config.json root`
-void main(List<String> _args) {
-  var args = ArgsSimple.parse(_args);
+void main(List<String> argsOrig) {
+  var args = ArgsSimple.parse(argsOrig);
 
   if (args.isEmpty) {
     print(
