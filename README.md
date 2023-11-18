@@ -3,7 +3,7 @@
 [![pub package](https://img.shields.io/pub/v/args_simple.svg?logo=dart&logoColor=00b9fc)](https://pub.dev/packages/args_simple)
 [![Null Safety](https://img.shields.io/badge/null-safety-brightgreen)](https://dart.dev/null-safety)
 [![Codecov](https://img.shields.io/codecov/c/github/gmpassos/args_simple)](https://app.codecov.io/gh/gmpassos/args_simple)
-[![CI](https://img.shields.io/github/workflow/status/gmpassos/args_simple/Dart%20CI/master?logo=github-actions&logoColor=white)](https://github.com/gmpassos/args_simple/actions)
+[![Dart CI](https://github.com/gmpassos/args_simple/actions/workflows/dart.yml/badge.svg?branch=master)](https://github.com/gmpassos/args_simple/actions/workflows/dart.yml)
 [![GitHub Tag](https://img.shields.io/github/v/tag/gmpassos/args_simple?logo=git&logoColor=white)](https://github.com/gmpassos/args_simple/releases)
 [![New Commits](https://img.shields.io/github/commits-since/gmpassos/args_simple/latest?logo=git&logoColor=white)](https://github.com/gmpassos/args_simple/network)
 [![Last Commits](https://img.shields.io/github/last-commit/gmpassos/args_simple?logo=git&logoColor=white)](https://github.com/gmpassos/args_simple/commits/master)
@@ -31,8 +31,8 @@ import 'package:args_simple/args_simple_io.dart';
 /// - `/path/config.json --port 81 -verbose`
 /// - `/path/config.json -verbose --sys-config /my/sys-config-dir`
 /// - `/path/config.json root`
-void main(List<String> _args) {
-  var args = ArgsSimple.parse(_args);
+void main(List<String> argsOrig) {
+  var args = ArgsSimple.parse(argsOrig);
 
   if (args.isEmpty) {
     print(

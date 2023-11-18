@@ -60,7 +60,16 @@ class ArgsSimple {
       if (a.startsWith('--')) {
         var k = normalizeKey(a.substring(2));
         var v = i < length - 1 ? args[i + 1] : '';
-        _options[k] = v;
+        var prev = _options[k];
+        if (prev != null) {
+          if (prev is List) {
+            prev.add(v);
+          } else {
+            _options[k] = [prev, v];
+          }
+        } else {
+          _options[k] = v;
+        }
         i += 2;
       } else if (a.startsWith('-P') || a.startsWith('-D')) {
         var idx = a.indexOf(_propertyDelimiter);
@@ -191,10 +200,18 @@ class ArgsSimple {
 
   void addFlag(String key) => _flags.add(normalizeKey(key));
 
-  bool flag<T>(String key, [T? def, TypeElementParser? parser]) {
+  bool flag<T>(String key) {
     if (_flags.contains(key)) return true;
     var keyLC = normalizeKey(key);
     return _flags.contains(keyLC);
+  }
+
+  bool? flagOr<T>(String key, bool? def) {
+    if (_flags.contains(key)) return true;
+    var keyLC = normalizeKey(key);
+    var found = _flags.contains(keyLC);
+    if (found) return true;
+    return def;
   }
 
   void putProperty(String key, Object value) =>
