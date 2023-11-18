@@ -1,6 +1,7 @@
 ## 1.1.0
 
 - `ArgsSimple`:
+  - `parse`: allow multiple values for the same option.
   - Added `flagOr`.
 
 - sdk: '>=3.0.0 <4.0.0'

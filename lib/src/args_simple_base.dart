@@ -60,7 +60,16 @@ class ArgsSimple {
       if (a.startsWith('--')) {
         var k = normalizeKey(a.substring(2));
         var v = i < length - 1 ? args[i + 1] : '';
-        _options[k] = v;
+        var prev = _options[k];
+        if (prev != null) {
+          if (prev is List) {
+            prev.add(v);
+          } else {
+            _options[k] = [prev, v];
+          }
+        } else {
+          _options[k] = v;
+        }
         i += 2;
       } else if (a.startsWith('-P') || a.startsWith('-D')) {
         var idx = a.indexOf(_propertyDelimiter);
