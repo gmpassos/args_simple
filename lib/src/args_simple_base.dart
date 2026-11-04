@@ -81,7 +81,7 @@ class ArgsSimple {
 
   void _loadJsonSections(Map json) {
     for (var a in json['arguments'] as List? ?? const []) {
-      _arguments.add('$a');
+      _arguments.add('${a ?? ''}');
     }
 
     for (var f in json['flags'] as Iterable? ?? const []) {
@@ -292,6 +292,10 @@ class ArgsSimple {
   Map? optionAsMap(String key, [Map? def]) =>
       option<Map>(key, def, TypeParser.parseMap);
 
+  /// Adds the flag [key] (normalized with [normalizeKey]).
+  ///
+  /// A flag that is a number (`addFlag('5')`) can't be given on a command
+  /// line: [toList] emits `-5`, which [ArgsSimple.parse] reads as an argument.
   void addFlag(String key) => _flags.add(normalizeKey(key));
 
   bool flag<T>(String key) {

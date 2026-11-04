@@ -704,7 +704,7 @@ void main() {
 
     test('fromJson sections: keys normalized, null values become empty', () {
       var args = ArgsSimple.fromJson({
-        'arguments': [1, 'b'],
+        'arguments': [1, 'b', null],
         'flags': {'Dry-Run'},
         'options': {
           'Port': 81,
@@ -713,7 +713,7 @@ void main() {
         },
         'properties': {'P-K': null},
       });
-      expect(args.arguments, equals(['1', 'b']));
+      expect(args.arguments, equals(['1', 'b', '']));
       expect(args.flags, equals({'dryrun'}));
       expect(
         args.options,
