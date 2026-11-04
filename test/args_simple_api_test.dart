@@ -25,10 +25,9 @@ void main() {
 
     test('properties with `=` and `:` delimiters', () {
       var args = ArgsSimple.parse(['-Pa=1', '-Db:two', '-DFlag', '-Pc=x=y']);
-      expect(
-        args.properties,
-        equals({'a': '1', 'b': 'two', 'flag': '', 'c': 'x=y'}),
-      );
+      expect(args.properties, equals({'a': '1', 'b': 'two', 'c': 'x=y'}));
+      // Without a `=`/`:` delimiter, `-DFlag` is a flag.
+      expect(args.flags, equals({'dflag'}));
     });
 
     test('keys are normalized', () {
@@ -223,6 +222,14 @@ void main() {
     test('normalizeKey', () {
       expect(ArgsSimple.normalizeKey('Foo-Bar_baz.1'), equals('foobarbaz1'));
       expect(ArgsSimple.normalizeKey(' A b '), equals('ab'));
+      expect(ArgsSimple.normalizeKey('Ünï-Code_2'), equals('ünïcode2'));
+      expect(ArgsSimple.normalizeKey('日本.語'), equals('日本語'));
+      expect(ArgsSimple.normalizeKey('a=b:c/😀'), equals('abc'));
+      // Idempotent:
+      for (var k in ['Foo-Bar', 'Ünï-Code', 'ẞ-x', 'İ', '日本']) {
+        var n = ArgsSimple.normalizeKey(k);
+        expect(ArgsSimple.normalizeKey(n), equals(n), reason: k);
+      }
     });
 
     test('toList round-trips through parse', () {
@@ -252,7 +259,7 @@ void main() {
         args.toJson(),
         equals({
           'arguments': ['a'],
-          'flags': {'f'},
+          'flags': ['f'],
         }),
       );
       expect(args.toString(), equals('[a, -f]'));
