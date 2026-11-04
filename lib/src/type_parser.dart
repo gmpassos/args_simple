@@ -225,10 +225,10 @@ class TypeParser {
       var s = '$value'.trim();
       if (s.isEmpty) return def;
 
-      var idx = s.indexOf(_regexpKeyValueDelimiter);
-      if (idx >= 0) {
-        var k = s.substring(0, idx);
-        var v = s.substring(idx + 1);
+      var delimiter = _regexpKeyValueDelimiter.firstMatch(s);
+      if (delimiter != null) {
+        var k = s.substring(0, delimiter.start);
+        var v = s.substring(delimiter.end);
         return MapEntry(keyParser(k) as K, valueParser(v) as V);
       }
       return MapEntry(keyParser(s) as K, null as V);

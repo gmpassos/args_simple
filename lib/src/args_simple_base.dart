@@ -281,7 +281,14 @@ class ArgsSimple {
     return [
       ..._arguments,
       ..._flags.map((e) => '-$e'),
-      ..._options.entries.expand((e) => ['--${e.key}', e.value.toString()]),
+      ..._options.entries.expand((e) {
+        var value = e.value;
+        // An option given more than once is stored as a `List`
+        // (see [ArgsSimple.parse]): emit one `--key value` pair per value.
+        return value is List
+            ? value.expand((v) => ['--${e.key}', '$v'])
+            : ['--${e.key}', '$value'];
+      }),
       ..._properties.entries.map((e) => '-P${e.key}=${e.value}'),
     ];
   }
