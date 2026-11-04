@@ -197,6 +197,8 @@ class TypeParser {
 
   /// Tries to parse a [MapEntry].
   /// - Returns [def] if [value] is `null` or an empty [String].
+  /// - A [String] key without a value (`'a'`) gives a `null` value when [V]
+  ///   is nullable, otherwise returns [def].
   static MapEntry<K, V>? parseMapEntry<K, V>(
     Object? value, {
     MapEntry<K, V>? def,
@@ -231,7 +233,13 @@ class TypeParser {
         var v = s.substring(delimiter.end);
         return MapEntry(keyParser(k) as K, valueParser(v) as V);
       }
-      return MapEntry(keyParser(s) as K, null as V);
+      // A key without a value: only representable when `V` is nullable.
+      // Otherwise return [def] (`parseMap` skips the entry) instead of
+      // failing with a `TypeError` on `null as V`.
+      if (null is V) {
+        return MapEntry(keyParser(s) as K, null as V);
+      }
+      return def;
     }
   }
 

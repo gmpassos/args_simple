@@ -1,3 +1,12 @@
+## 1.2.1
+
+- `ArgsSimple`:
+  - Fixed `argument`/`option`/`property` (and the typed `*AsInt`, `*AsDouble`, `*AsBool`, ... accessors) throwing a `TypeError` when a value can't be parsed (e.g. `--port abc` with `optionAsInt('port', 8080)`): they now return the default (or `null`).
+- `TypeParser`:
+  - Fixed `parseMap`/`parseMapEntry` throwing a `TypeError` for a key without a value (`parseMap<String, String>('a;b=1')`) when the value type is non-nullable: the entry is now skipped by `parseMap` (`{'b': '1'}`) and `parseMapEntry` returns `def`. A nullable/dynamic value type still keeps the key with a `null` value.
+- Tests: added edge-case tests (empty input, `--`, `--key=value`, `=` in values, repeated options/flags/properties, `-P`/`-D` prefixes, negative numbers vs. flags, quoting, unicode), `parse -> toList -> parse` round-trips, and end-to-end tests running real processes (the example CLI, and a script comparing real `argv` parsing with in-process parsing). Tests: 69 -> 127. Line coverage: 99.3% -> 100%.
+- GitHub CI: the Codecov upload now uses the `CODECOV_TOKEN` secret and fails CI on error.
+
 ## 1.2.0
 
 - `ArgsSimple`:
