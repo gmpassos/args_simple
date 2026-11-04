@@ -67,7 +67,5 @@ jobs:
           directory: ./coverage/
           flags: unittests
           env_vars: OS,DART
-          # No CODECOV_TOKEN secret is configured in this repo yet; don't let
-          # the upload gate CI.
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           verbose: true

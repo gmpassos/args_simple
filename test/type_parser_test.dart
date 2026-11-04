@@ -150,6 +150,44 @@ void main() {
       expect(TypeParser.parseMap('a;b=1'), equals({'a': null, 'b': '1'}));
     });
 
+    test('key without value and a non-nullable value type', () {
+      // Regression: used to throw a `TypeError` (`null as String`).
+      expect(TypeParser.parseMap<String, String>('a;b=1'), equals({'b': '1'}));
+      expect(TypeParser.parseMap<String, int>('a;b=1;c'), equals({'b': 1}));
+      expect(TypeParser.parseMap<String, String>('a'), isEmpty);
+      // A nullable value type keeps the key, with a `null` value.
+      expect(
+        TypeParser.parseMap<String, String?>('a;b=1'),
+        equals({'a': null, 'b': '1'}),
+      );
+    });
+
+    test('unparseable value with a non-nullable value type', () {
+      // Current behaviour (pinned): the value parser returns `null` and the
+      // cast to `V` fails.
+      expect(
+        () => TypeParser.parseMap<String, int>('a=x'),
+        throwsA(isA<TypeError>()),
+      );
+      // An explicit value parser decides how to handle it.
+      expect(
+        TypeParser.parseMap<String, int>(
+          'a=x;b=2',
+          valueParser: (v) => TypeParser.parseInt(v, -1),
+        ),
+        equals({'a': -1, 'b': 2}),
+      );
+    });
+
+    test('trims the whole value and splits on `;` and `&`', () {
+      expect(
+        TypeParser.parseMap('  a=1 & b=2 ;c=3  '),
+        equals({'a': '1', 'b': '2', 'c': '3'}),
+      );
+      // Only the first delimiter separates key and value.
+      expect(TypeParser.parseMap('u=a:b=c'), equals({'u': 'a:b=c'}));
+    });
+
     test('null and empty', () {
       expect(TypeParser.parseMap(null), isNull);
       expect(TypeParser.parseMap(null, def: {'d': 1}), equals({'d': 1}));
@@ -209,6 +247,25 @@ void main() {
       expect(TypeParser.parseMapEntry(null, def: def), equals(def));
       expect(TypeParser.parseMapEntry('', def: def), equals(def));
     });
+
+    test('key without value', () {
+      var e = TypeParser.parseMapEntry<String, String?>(' a ')!;
+      expect([e.key, e.value], equals(['a', null]));
+
+      var def = const MapEntry('d', 'v');
+      expect(TypeParser.parseMapEntry<String, String>('a'), isNull);
+      expect(
+        TypeParser.parseMapEntry<String, String>('a', def: def),
+        equals(def),
+      );
+    });
+
+    test('types without a parser are cast as-is', () {
+      var e = TypeParser.parseMapEntry<Object, Object>('k=1')!;
+      expect([e.key, e.value], equals(['k', '1']));
+      var p = TypeParser.parseMap<Object, Object>({1: 2})!;
+      expect(p, equals({1: 2}));
+    });
   });
 
   group('TypeParser scalars', () {
@@ -230,6 +287,9 @@ void main() {
       expect(TypeParser.parseInt(null, 7), equals(7));
       expect(TypeParser.parseInt('', 7), equals(7));
       expect(TypeParser.parseInt('zz', 7), equals(7));
+      // Non-String objects are parsed from their `toString`.
+      expect(TypeParser.parseInt(StringBuffer(' 42 ')), equals(42));
+      expect(TypeParser.parseDouble(StringBuffer('1.5')), equals(1.5));
     });
 
     test('parseDouble', () {

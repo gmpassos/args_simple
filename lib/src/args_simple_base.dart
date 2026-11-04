@@ -116,7 +116,8 @@ class ArgsSimple {
 
     parser ??= TypeParser.parserFor<T>(obj: def);
     if (parser != null) {
-      return parser(value) as T;
+      // A parser returns `null` for an invalid value: fall back to [def].
+      return parser(value) as T? ?? def;
     } else {
       return value as T;
     }
@@ -165,7 +166,8 @@ class ArgsSimple {
 
     parser ??= TypeParser.parserFor<T>(obj: def);
     if (parser != null) {
-      return parser(value) as T;
+      // A parser returns `null` for an invalid value: fall back to [def].
+      return parser(value) as T? ?? def;
     } else {
       return value as T;
     }
@@ -230,7 +232,8 @@ class ArgsSimple {
 
     parser ??= TypeParser.parserFor<T>(obj: def);
     if (parser != null) {
-      return parser(value) as T;
+      // A parser returns `null` for an invalid value: fall back to [def].
+      return parser(value) as T? ?? def;
     } else {
       return value as T;
     }

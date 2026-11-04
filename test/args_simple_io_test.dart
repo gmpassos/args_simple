@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:args_simple/args_simple_io.dart';
@@ -214,6 +215,7 @@ void main() {
     Future<ProcessResult> runExample(List<String> args) => Process.run(
       Platform.resolvedExecutable,
       ['run', 'example/args_simple_example.dart', ...args],
+      stdoutEncoding: utf8,
     );
 
     test('prints usage when called without arguments', () async {
@@ -246,6 +248,176 @@ void main() {
       var r = await runExample([jsonFile.path]);
       expect(r.exitCode, equals(0), reason: '${r.stderr}');
       expect(r.stdout, isEmpty);
+    });
+
+    test('uses defaults for missing and invalid values', () async {
+      // Regression: an invalid `--port` used to crash with a `TypeError`.
+      var r = await runExample(['not-json.txt', '-verbose', '--port', 'abc']);
+      expect(r.exitCode, equals(0), reason: '${r.stderr}');
+
+      var out = r.stdout as String;
+      expect(out, contains('-- Config: {}'));
+      expect(out, contains('-- User: guest'));
+      expect(
+        out,
+        contains("-- System Config Dir: Directory: '/default/sys-config-dir'"),
+      );
+      expect(out, contains('-- Port: 8080'));
+      expect(out, contains('[not-json.txt, -verbose, --port, abc]'));
+    });
+
+    test('a trailing --port without a value uses the default', () async {
+      var r = await runExample(['x', '-verbose', '--port']);
+      expect(r.exitCode, equals(0), reason: '${r.stderr}');
+      expect(r.stdout, contains('-- Port: 8080'));
+    });
+
+    test('keeps unicode, spaces and negative numbers as arguments', () async {
+      var r = await runExample(['cfg', 'José da Silva 😀', '-verbose', '-5']);
+      expect(r.exitCode, equals(0), reason: '${r.stderr}');
+
+      var out = r.stdout as String;
+      expect(out, contains('-- User: José da Silva 😀'));
+      expect(out, contains('[cfg, José da Silva 😀, -5, -verbose]'));
+    });
+
+    test('fails on an invalid JSON config file', () async {
+      var bad = File('${tmp.path}/bad.json')..writeAsStringSync('{oops');
+      var r = await runExample([bad.path]);
+      expect(r.exitCode, isNot(equals(0)));
+      expect(r.stderr, contains('FormatException'));
+    });
+
+    test('fails on a missing JSON config file', () async {
+      var r = await runExample(['${tmp.path}/missing.json']);
+      expect(r.exitCode, isNot(equals(0)));
+      expect(r.stderr, contains('missing.json'));
+    });
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  group('real process argv', () {
+    // A script that parses its real `argv` and prints the result as JSON.
+    const dumpScript = r'''
+import 'dart:convert';
+import 'package:args_simple/args_simple.dart';
+
+void main(List<String> argv) {
+  var args = ArgsSimple.parse(argv);
+  print(jsonEncode({
+    'arguments': args.arguments,
+    'flags': args.flags.toList(),
+    'options': args.options,
+    'properties': args.properties,
+    'toList': args.toList(),
+  }));
+}
+''';
+
+    late File script;
+
+    setUp(() {
+      script = File('${tmp.path}/dump_args.dart')
+        ..writeAsStringSync(dumpScript);
+    });
+
+    Future<Map<String, dynamic>> dump(List<String> argv) async {
+      var packageConfig = File('.dart_tool/package_config.json').absolute;
+      var r = await Process.run(Platform.resolvedExecutable, [
+        '--packages=${packageConfig.path}',
+        script.path,
+        ...argv,
+      ], stdoutEncoding: utf8);
+      expect(r.exitCode, equals(0), reason: '${r.stderr}');
+      return jsonDecode(r.stdout as String) as Map<String, dynamic>;
+    }
+
+    Map<String, Object> inProcess(List<String> argv) {
+      var args = ArgsSimple.parse(argv);
+      return {
+        'arguments': args.arguments,
+        'flags': args.flags.toList(),
+        'options': args.options,
+        'properties': args.properties,
+        'toList': args.toList(),
+      };
+    }
+
+    const argv = [
+      'file name.json',
+      '"quoted"',
+      "it's",
+      'José 😀',
+      '',
+      '-5',
+      '-1.5',
+      '-v',
+      '-V',
+      '--host',
+      'a',
+      '--host',
+      'b=c',
+      '--msg',
+      '  spaced  ',
+      '-Purl=http://h:1/?a=b&c=d',
+      '-Dlang=日本語',
+      '--',
+      '-x',
+    ];
+
+    test('parses argv received by a real process like in-process', () async {
+      var out = await dump(argv);
+      expect(out, equals(inProcess(argv)));
+
+      expect(
+        out['arguments'],
+        equals([
+          'file name.json',
+          '"quoted"',
+          "it's",
+          'José 😀',
+          '',
+          '-5',
+          '-1.5',
+        ]),
+      );
+      expect(out['flags'], equals(['v']));
+      expect(
+        out['options'],
+        equals({
+          'host': ['a', 'b=c'],
+          'msg': '  spaced  ',
+          '': '-x',
+        }),
+      );
+      expect(
+        out['properties'],
+        equals({'url': 'http://h:1/?a=b&c=d', 'lang': '日本語'}),
+      );
+    });
+
+    test('toList output passed to a new process round-trips', () async {
+      var first = await dump(argv);
+      var second = await dump((first['toList'] as List).cast<String>());
+
+      expect(second['arguments'], equals(first['arguments']));
+      expect(second['flags'], equals(first['flags']));
+      expect(second['options'], equals(first['options']));
+      expect(second['properties'], equals(first['properties']));
+      expect(second['toList'], equals(first['toList']));
+    });
+
+    test('no arguments', () async {
+      var out = await dump(const []);
+      expect(
+        out,
+        equals({
+          'arguments': [],
+          'flags': [],
+          'options': {},
+          'properties': {},
+          'toList': [],
+        }),
+      );
     });
   }, timeout: const Timeout(Duration(minutes: 2)));
 }
