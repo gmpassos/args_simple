@@ -40,7 +40,8 @@ class ArgsSimple {
 
     if (json is Map) {
       args._options.addAll(
-          json.map((key, value) => MapEntry(key.toString(), value ?? '')));
+        json.map((key, value) => MapEntry(key.toString(), value ?? '')),
+      );
     } else {
       var s = '$json';
       args._arguments.add(s);
@@ -280,17 +281,24 @@ class ArgsSimple {
     return [
       ..._arguments,
       ..._flags.map((e) => '-$e'),
-      ..._options.entries.expand((e) => ['--${e.key}', e.value.toString()]),
+      ..._options.entries.expand((e) {
+        var value = e.value;
+        // An option given more than once is stored as a `List`
+        // (see [ArgsSimple.parse]): emit one `--key value` pair per value.
+        return value is List
+            ? value.expand((v) => ['--${e.key}', '$v'])
+            : ['--${e.key}', '$value'];
+      }),
       ..._properties.entries.map((e) => '-P${e.key}=${e.value}'),
     ];
   }
 
   Map<String, Object> toJson() => {
-        if (_arguments.isNotEmpty) 'arguments': [..._arguments],
-        if (_flags.isNotEmpty) 'flags': {..._flags},
-        if (_options.isNotEmpty) 'options': {..._options},
-        if (_properties.isNotEmpty) 'properties': {..._properties},
-      };
+    if (_arguments.isNotEmpty) 'arguments': [..._arguments],
+    if (_flags.isNotEmpty) 'flags': {..._flags},
+    if (_options.isNotEmpty) 'options': {..._options},
+    if (_properties.isNotEmpty) 'properties': {..._properties},
+  };
 
   @override
   String toString() => toList().toString();
