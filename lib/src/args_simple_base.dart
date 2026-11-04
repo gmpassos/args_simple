@@ -29,6 +29,15 @@ class ArgsSimple {
     return ArgsSimple.fromJson(json);
   }
 
+  /// Creates an [ArgsSimple] from a JSON value:
+  /// - A [List]: its elements (as [String]s) are parsed like a command line
+  ///   (see [ArgsSimple.parse]).
+  /// - A [Map] in the [toJson] format: a non-empty [Map] whose keys are only
+  ///   `arguments` (a [List]), `flags` (a [List]/[Set]), `options` and
+  ///   `properties` (both [Map]s). `toJson -> fromJson` round-trips.
+  /// - Any other [Map]: its entries are the options (a `null` value becomes
+  ///   an empty [String]; the keys are kept as given).
+  /// - Anything else: a single argument (`'$json'`).
   factory ArgsSimple.fromJson(Object json) {
     if (json is List<String>) {
       return ArgsSimple.parse(json);
@@ -39,9 +48,13 @@ class ArgsSimple {
     var args = ArgsSimple();
 
     if (json is Map) {
-      args._options.addAll(
-        json.map((key, value) => MapEntry(key.toString(), value ?? '')),
-      );
+      if (_isJsonSections(json)) {
+        args._loadJsonSections(json);
+      } else {
+        args._options.addAll(
+          json.map((key, value) => MapEntry(key.toString(), value ?? '')),
+        );
+      }
     } else {
       var s = '$json';
       args._arguments.add(s);
@@ -50,48 +63,102 @@ class ArgsSimple {
     return args;
   }
 
+  /// Whether [json] is in the [toJson] format.
+  static bool _isJsonSections(Map json) {
+    if (json.isEmpty) return false;
+    for (var e in json.entries) {
+      var v = e.value;
+      var ok = switch (e.key) {
+        'arguments' => v is List,
+        'flags' => v is List || v is Set,
+        'options' || 'properties' => v is Map,
+        _ => false,
+      };
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  void _loadJsonSections(Map json) {
+    for (var a in json['arguments'] as List? ?? const []) {
+      _arguments.add('${a ?? ''}');
+    }
+
+    for (var f in json['flags'] as Iterable? ?? const []) {
+      _flags.add(normalizeKey('$f'));
+    }
+
+    Object jsonValue(Object? v) =>
+        v is List ? v.map((e) => e ?? '').toList() : v ?? '';
+
+    var options = json['options'] as Map? ?? const {};
+    for (var e in options.entries) {
+      _options[normalizeKey('${e.key}')] = jsonValue(e.value);
+    }
+
+    var properties = json['properties'] as Map? ?? const {};
+    for (var e in properties.entries) {
+      _properties[normalizeKey('${e.key}')] = jsonValue(e.value);
+    }
+  }
+
+  /// The delimiters between the key and the value of a property
+  /// (`-Dkey=value` or `-Dkey:value`).
   static final RegExp _propertyDelimiter = RegExp(r'[=:]');
 
+  /// Parses command-line [args]:
+  ///
+  /// - `--`: ends option parsing. Every following element is an argument,
+  ///   even if it starts with `-`.
+  /// - `--key=value`: the option `key` with `value` (split on the first `=`;
+  ///   the value may be empty or contain `=`).
+  /// - `--key value`: the option `key` with `value`. The next element is
+  ///   always consumed as the value (even if it starts with `-`, or is `--`);
+  ///   a trailing `--key` gets an empty value. An option given more than once
+  ///   is stored as a [List] of its values.
+  /// - `-Dkey=value` / `-Pkey=value` (case-sensitive `D`/`P`, Java-style): the
+  ///   property `key` with `value` (split on the first `=` or `:`). Without a
+  ///   `=`/`:` (`-Debug`, `-Port`) it is a flag.
+  /// - `-number` (`-1`, `-1.5`, `-1e3`): an argument (a negative number).
+  /// - `-name`: the flag `name`. There is no `-name=value` form: `=` is not a
+  ///   key character, so `-name=1` is the flag `name1`.
+  /// - Anything else: an argument.
+  ///
+  /// Keys are normalized with [normalizeKey].
   ArgsSimple.parse([List<String> args = const <String>[]]) {
     final length = args.length;
 
     for (var i = 0; i < length;) {
       var a = args[i];
 
-      if (a.startsWith('--')) {
-        var k = normalizeKey(a.substring(2));
-        var v = i < length - 1 ? args[i + 1] : '';
-        var prev = _options[k];
-        if (prev != null) {
-          if (prev is List) {
-            prev.add(v);
-          } else {
-            _options[k] = [prev, v];
-          }
+      if (a == '--') {
+        _arguments.addAll(args.sublist(i + 1));
+        break;
+      } else if (a.startsWith('--')) {
+        String k, v;
+        var idx = a.indexOf('=');
+        if (idx >= 0) {
+          k = normalizeKey(a.substring(2, idx));
+          v = a.substring(idx + 1);
+          ++i;
         } else {
-          _options[k] = v;
+          k = normalizeKey(a.substring(2));
+          v = i < length - 1 ? args[i + 1] : '';
+          i += 2;
         }
-        i += 2;
-      } else if (a.startsWith('-P') || a.startsWith('-D')) {
+        _addOption(k, v);
+      } else if ((a.startsWith('-P') || a.startsWith('-D')) &&
+          a.contains(_propertyDelimiter)) {
         var idx = a.indexOf(_propertyDelimiter);
-        if (idx > 0) {
-          var k = normalizeKey(a.substring(2, idx));
-          var v = a.substring(idx + 1);
-          _properties[k] = v;
-        } else {
-          var k = normalizeKey(a.substring(2));
-          _properties[k] = '';
-        }
+        var k = normalizeKey(a.substring(2, idx));
+        var v = a.substring(idx + 1);
+        _properties[k] = v;
+        ++i;
+      } else if (_isNegativeNumber(a)) {
+        _arguments.add(a);
         ++i;
       } else if (a.startsWith('-')) {
-        var s = a.substring(1);
-        var n = num.tryParse(s);
-        if (n != null) {
-          _arguments.add(a);
-        } else {
-          var k = normalizeKey(s);
-          _flags.add(k);
-        }
+        _flags.add(normalizeKey(a.substring(1)));
         ++i;
       } else {
         _arguments.add(a);
@@ -99,6 +166,30 @@ class ArgsSimple {
       }
     }
   }
+
+  void _addOption(String k, String v) {
+    var prev = _options[k];
+    if (prev != null) {
+      if (prev is List) {
+        prev.add(v);
+      } else {
+        _options[k] = [prev, v];
+      }
+    } else {
+      _options[k] = v;
+    }
+  }
+
+  /// Whether [a] is `-` followed by a number (parsed as an argument).
+  static bool _isNegativeNumber(String a) =>
+      a.startsWith('-') &&
+      !a.startsWith('--') &&
+      num.tryParse(a.substring(1)) != null;
+
+  /// Whether the argument [a] would not be parsed back as an argument by
+  /// [ArgsSimple.parse] (it needs to come after `--` in [toList]).
+  static bool _needsEndOfOptions(String a) =>
+      a.startsWith('-') && !_isNegativeNumber(a);
 
   bool get isEmpty =>
       _arguments.isEmpty &&
@@ -201,6 +292,10 @@ class ArgsSimple {
   Map? optionAsMap(String key, [Map? def]) =>
       option<Map>(key, def, TypeParser.parseMap);
 
+  /// Adds the flag [key] (normalized with [normalizeKey]).
+  ///
+  /// A flag that is a number (`addFlag('5')`) can't be given on a command
+  /// line: [toList] emits `-5`, which [ArgsSimple.parse] reads as an argument.
   void addFlag(String key) => _flags.add(normalizeKey(key));
 
   bool flag<T>(String key) {
@@ -275,31 +370,59 @@ class ArgsSimple {
     }
   }
 
-  static final _regExpNonNormalizedKey = RegExp(r'[^a-z0-9]');
+  static final _regExpNonNormalizedKey = RegExp(
+    r'[^\p{L}\p{M}\p{N}]',
+    unicode: true,
+  );
 
+  /// Normalizes a flag, option or property key, making keys case-insensitive
+  /// and insensitive to separators (`--sys-config`, `--sys_config` and
+  /// `--SysConfig` are the same key):
+  /// - The key is lower-cased.
+  /// - Every character that is not a Unicode letter, mark or digit (`-`, `_`,
+  ///   `.`, `=`, spaces, punctuation, symbols, emoji) is removed.
+  ///
+  /// Non-ASCII letters and digits are kept: `--Ünïcode` is `ünïcode`.
   static String normalizeKey(String key) =>
-      key.toLowerCase().replaceAll(_regExpNonNormalizedKey, '').trim();
+      key.toLowerCase().replaceAll(_regExpNonNormalizedKey, '');
 
+  /// Serializes back to a command line that [ArgsSimple.parse] parses to the
+  /// same arguments, flags, options and properties.
+  ///
+  /// The order is: arguments, flags, options, properties. If an argument
+  /// starts with `-` (and is not a negative number), the arguments are
+  /// emitted last, after a `--` (end of options).
   List<String> toList() {
+    var endOfOptions = _arguments.any(_needsEndOfOptions);
     return [
-      ..._arguments,
+      if (!endOfOptions) ..._arguments,
       ..._flags.map((e) => '-$e'),
       ..._options.entries.expand((e) {
         var value = e.value;
         // An option given more than once is stored as a `List`
         // (see [ArgsSimple.parse]): emit one `--key value` pair per value.
-        return value is List
-            ? value.expand((v) => ['--${e.key}', '$v'])
-            : ['--${e.key}', '$value'];
+        var values = value is List ? value : [value];
+        // A key from `fromJson(Map)` is not normalized: a raw key with `=`
+        // would be split by `parse`.
+        var key = normalizeKey(e.key);
+        // An empty key can only be given as `--=value` (`--` ends options).
+        return key.isEmpty
+            ? values.map((v) => '--=$v')
+            : values.expand((v) => ['--$key', '$v']);
       }),
       ..._properties.entries.map((e) => '-P${e.key}=${e.value}'),
+      if (endOfOptions) ...['--', ..._arguments],
     ];
   }
 
+  /// Returns a JSON-encodable copy: `arguments` and `flags` as [List]s,
+  /// `options` and `properties` as [Map]s (empty sections are omitted).
+  /// See [ArgsSimple.fromJson].
   Map<String, Object> toJson() => {
     if (_arguments.isNotEmpty) 'arguments': [..._arguments],
-    if (_flags.isNotEmpty) 'flags': {..._flags},
-    if (_options.isNotEmpty) 'options': {..._options},
+    if (_flags.isNotEmpty) 'flags': [..._flags],
+    if (_options.isNotEmpty)
+      'options': _options.map((k, v) => MapEntry(k, v is List ? [...v] : v)),
     if (_properties.isNotEmpty) 'properties': {..._properties},
   };
 

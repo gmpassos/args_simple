@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:args_simple/args_simple.dart';
 import 'package:test/test.dart';
 
@@ -37,17 +39,41 @@ void main() {
   });
 
   group('ArgsSimple.parse: `--` and options', () {
-    test('`--` is not a terminator: it is an option with an empty key', () {
-      var args = ArgsSimple.parse(['--', '-v', 'x']);
-      expect(args.options, equals({'': '-v'}));
-      expect(args.flags, isEmpty);
-      expect(args.arguments, equals(['x']));
+    test('`--` ends options: everything after it is an argument', () {
+      // Regression: `--` used to be an option with an empty key.
+      var args = ArgsSimple.parse([
+        'a',
+        '-v',
+        '--',
+        '-x',
+        '--port',
+        '81',
+        '-Pk=v',
+        '--',
+        '-5',
+        'b',
+      ]);
+      expect(
+        args.arguments,
+        equals(['a', '-x', '--port', '81', '-Pk=v', '--', '-5', 'b']),
+      );
+      expect(args.flags, equals({'v'}));
+      expect(args.options, isEmpty);
+      expect(args.properties, isEmpty);
     });
 
-    test('a trailing `--` gets an empty value', () {
+    test('a trailing `--` is dropped', () {
       var args = ArgsSimple.parse(['a', '--']);
       expect(args.arguments, equals(['a']));
-      expect(args.options, equals({'': ''}));
+      expect(args.options, isEmpty);
+      expect(args.toList(), equals(['a']));
+    });
+
+    test('`--` as the value of an option is consumed as the value', () {
+      var args = ArgsSimple.parse(['--sep', '--', '-x']);
+      expect(args.options, equals({'sep': '--'}));
+      expect(args.flags, equals({'x'}));
+      expect(args.arguments, isEmpty);
     });
 
     test('an option always consumes the next argument as its value', () {
@@ -65,10 +91,54 @@ void main() {
       expect(args.optionAsBool('port', true), isTrue);
     });
 
-    test('`--key=value` is not split: `=` is dropped from the key', () {
+    test('`--key=value` is split on the first `=`', () {
+      // Regression: used to be the option `port81` consuming `x`.
       var args = ArgsSimple.parse(['--port=81', 'x']);
-      expect(args.options, equals({'port81': 'x'}));
-      expect(args.option('port'), isNull);
+      expect(args.options, equals({'port': '81'}));
+      expect(args.optionAsInt('port'), equals(81));
+      expect(args.arguments, equals(['x']));
+    });
+
+    test('`--key=value`: the value may be empty or contain `=`', () {
+      var args = ArgsSimple.parse([
+        '--empty=',
+        '--expr=a=b==c',
+        '--Sys-Config=/etc',
+        '--=v',
+        'arg',
+      ]);
+      expect(
+        args.options,
+        equals({'empty': '', 'expr': 'a=b==c', 'sysconfig': '/etc', '': 'v'}),
+      );
+      expect(args.optionAsInt('empty', 7), equals(7));
+      expect(args.arguments, equals(['arg']));
+    });
+
+    test('`--key=value` and `--key value` can be mixed and repeated', () {
+      var args = ArgsSimple.parse(['--h=a', '--h', 'b', '--h=', '--k', 'x=y']);
+      expect(
+        args.options,
+        equals({
+          'h': ['a', 'b', ''],
+          'k': 'x=y',
+        }),
+      );
+    });
+
+    test('`--flag=...` is an option, not a flag', () {
+      var args = ArgsSimple.parse(['--verbose=true', '--quiet=false', '--x=']);
+      expect(args.flags, isEmpty);
+      expect(args.flag('verbose'), isFalse);
+      expect(args.optionAsBool('verbose'), isTrue);
+      expect(args.optionAsBool('quiet'), isFalse);
+      expect(args.optionAsBool('x'), isNull);
+      // Reading a boolean given either as `-flag` or `--flag=bool`:
+      bool on(ArgsSimple a, String k) =>
+          a.flagOr(k, null) ?? a.optionAsBool(k) ?? false;
+      expect(on(args, 'verbose'), isTrue);
+      expect(on(args, 'quiet'), isFalse);
+      expect(on(ArgsSimple.parse(['-quiet']), 'quiet'), isTrue);
     });
 
     test('`=` and `:` inside option values are preserved', () {
@@ -182,11 +252,25 @@ void main() {
       expect(args.arguments, isEmpty);
     });
 
-    test('flags starting with P or D are parsed as properties', () {
-      // `-P`/`-D` is a property prefix, case-sensitively.
+    test('flags starting with P or D (without `=`) are flags', () {
+      // Regression: `-Port`/`-Debug` used to be the properties `ort`/`ebug`.
       var args = ArgsSimple.parse(['-Port', '-Debug', '-port', '-debug']);
-      expect(args.properties, equals({'ort': '', 'ebug': ''}));
+      expect(args.properties, isEmpty);
       expect(args.flags, equals({'port', 'debug'}));
+      expect(args.flag('Port'), isTrue);
+      expect(args.flag('debug'), isTrue);
+    });
+
+    test('`-P`/`-D` alone or without a value delimiter are flags', () {
+      var args = ArgsSimple.parse(['-P', '-D', '-Pf', '-Dx-y']);
+      expect(args.properties, isEmpty);
+      expect(args.flags, equals({'p', 'd', 'pf', 'dxy'}));
+    });
+
+    test('lower-case `-p`/`-d` are never property prefixes', () {
+      var args = ArgsSimple.parse(['-pa=1', '-db:2']);
+      expect(args.properties, isEmpty);
+      expect(args.flags, equals({'pa1', 'db2'}));
     });
   });
 
@@ -219,14 +303,15 @@ void main() {
         '-Pa=b=c',
         '-Db:c=d',
         '-Pe=',
-        '-Pf',
+        '-Dg:',
+        '-Dh:x',
         '-P=v',
-        '-P',
       ]);
       expect(
         args.properties,
-        equals({'a': 'b=c', 'b': 'c=d', 'e': '', 'f': '', '': ''}),
+        equals({'a': 'b=c', 'b': 'c=d', 'e': '', 'g': '', 'h': 'x', '': 'v'}),
       );
+      expect(args.flags, isEmpty);
     });
 
     test('`-P=v` gives the empty key a value', () {
@@ -277,7 +362,9 @@ void main() {
       expect(args.propertyAsString('q'), equals('"x y"'));
     });
 
-    test('unicode values are preserved; non a-z0-9 key chars are dropped', () {
+    test('unicode values and key letters/digits are preserved', () {
+      // Regression: non a-z0-9 key characters used to be dropped
+      // (`--Ünïcode` was `ncode`).
       var args = ArgsSimple.parse([
         'José',
         '日本語',
@@ -285,11 +372,30 @@ void main() {
         'ünï 😀',
         '-Pclé=valeur',
         '-ñandú',
+        '--日本-語',
+        'jp',
+        '--٣٤',
+        'arabic-indic digits',
       ]);
       expect(args.arguments, equals(['José', '日本語']));
-      expect(args.options, equals({'ncode': 'ünï 😀'}));
-      expect(args.properties, equals({'cl': 'valeur'}));
-      expect(args.flags, equals({'and'}));
+      expect(
+        args.options,
+        equals({'ünïcode': 'ünï 😀', '日本語': 'jp', '٣٤': 'arabic-indic digits'}),
+      );
+      expect(args.properties, equals({'clé': 'valeur'}));
+      expect(args.flags, equals({'ñandú'}));
+
+      // Case and separators are still normalized:
+      expect(args.optionAsString('ÜNÏCODE'), equals('ünï 😀'));
+      expect(args.optionAsString('ün-ï_code'), equals('ünï 😀'));
+      expect(args.propertyAsString('CLÉ'), equals('valeur'));
+      expect(args.flag('Ñandú'), isTrue);
+    });
+
+    test('symbols and emoji are not key characters', () {
+      var args = ArgsSimple.parse(['--a😀b', '1', '-c€d']);
+      expect(args.options, equals({'ab': '1'}));
+      expect(args.flags, equals({'cd'}));
     });
   });
 
@@ -407,7 +513,23 @@ void main() {
     });
 
     test('empty keys and trailing option', () {
-      expectRoundTrip(['--', 'v', '-', '-P=w', '--last']);
+      expectRoundTrip(['--=v', '-', '-P=w', '--last']);
+    });
+
+    test('arguments after `--` that look like flags/options/properties', () {
+      expectRoundTrip(['a', '-v', '--', '-x', '--y', 'z', '-Pk=v', '--', '-5']);
+      var args = ArgsSimple.parse(['a', '--', '-x']);
+      expect(args.toList(), equals(['--', 'a', '-x']));
+    });
+
+    test('`--key=value` forms are emitted as `--key value`', () {
+      expectRoundTrip(['--a=1', '--b=', '--c=x=y', '--a=2']);
+      var args = ArgsSimple.parse(['--a=1', '--b=']);
+      expect(args.toList(), equals(['--a', '1', '--b', '']));
+    });
+
+    test('unicode keys', () {
+      expectRoundTrip(['--Ünïcode', 'v', '-ñandú', '-Pclé=x', '--日本', 'y']);
     });
 
     test('quoting, spaces, `=` and unicode', () {
@@ -442,32 +564,185 @@ void main() {
       expect(back.propertyAsBool('b'), isTrue);
     });
 
-    test('a programmatic argument starting with `-` becomes a flag', () {
-      // Known limitation: `toList` does not escape arguments.
-      var args = ArgsSimple()..addArgument('-x');
+    test('a programmatic argument starting with `-` stays an argument', () {
+      // Regression: `toList` did not escape arguments, so `-x` came back as
+      // a flag. Now the arguments are emitted after `--`.
+      var args = ArgsSimple()
+        ..addArgument('a')
+        ..addArgument('-x')
+        ..addArgument('--')
+        ..addFlag('f')
+        ..putOption('o', 'v');
+      expect(args.toList(), equals(['-f', '--o', 'v', '--', 'a', '-x', '--']));
       var back = ArgsSimple.parse(args.toList());
-      expect(back.arguments, isEmpty);
-      expect(back.flags, equals({'x'}));
+      expect(back.arguments, equals(['a', '-x', '--']));
+      expect(back.flags, equals({'f'}));
+      expect(back.options, equals({'o': 'v'}));
+    });
+
+    test('negative numbers do not need `--`', () {
+      var args = ArgsSimple()
+        ..addArgument('-5')
+        ..addArgument('-1.5');
+      expect(args.toList(), equals(['-5', '-1.5']));
+      expectRoundTrip(args.toList());
+    });
+
+    test('an option with an empty key is emitted as `--=value`', () {
+      var args = ArgsSimple()..putOption('-', 'v');
+      expect(args.toList(), equals(['--=v']));
+      expect(ArgsSimple.parse(args.toList()).options, equals({'': 'v'}));
+    });
+
+    test('property-style: random inputs round-trip', () {
+      var tokens = [
+        'a',
+        'b c',
+        '',
+        '-',
+        '--',
+        '-v',
+        '-V',
+        '-5',
+        '-1e3',
+        '--k',
+        '--k=',
+        '--k=1=2',
+        '--=x',
+        '-Pp=1',
+        '-Dq:2',
+        '-P',
+        '-Port',
+        '-Pz',
+        '=',
+        'ü',
+        '--Ünï',
+        '-ñ',
+        '😀',
+      ];
+      var seed = 20261104;
+      for (var n = 0; n < 500; ++n) {
+        // A small deterministic LCG, so failures are reproducible.
+        var len = (seed = (seed * 1103515245 + 12345) & 0x7fffffff) % 9;
+        var input = [
+          for (var i = 0; i < len; ++i)
+            tokens[(seed = (seed * 1103515245 + 12345) & 0x7fffffff) %
+                tokens.length],
+        ];
+        expectRoundTrip(input);
+      }
     });
   });
 
   group('ArgsSimple JSON', () {
-    test('toJson exposes copies, flags as a Set', () {
-      var args = ArgsSimple.parse(['a', '-f', '--o', 'v', '-Pp=1']);
+    test('toJson exposes copies, flags as a List', () {
+      // Regression: `flags` used to be a `Set`, so `jsonEncode` failed.
+      var args = ArgsSimple.parse([
+        'a',
+        '-f',
+        '--o',
+        'v',
+        '--h',
+        '1',
+        '--h',
+        '2',
+        '-Pp=1',
+      ]);
       var json = args.toJson();
       expect(
         json,
         equals({
           'arguments': ['a'],
-          'flags': {'f'},
-          'options': {'o': 'v'},
+          'flags': ['f'],
+          'options': {
+            'o': 'v',
+            'h': ['1', '2'],
+          },
           'properties': {'p': '1'},
         }),
       );
-      expect(json['flags'], isA<Set>());
+      expect(json['flags'], isA<List>());
+      expect(
+        jsonEncode(json),
+        equals(
+          '{"arguments":["a"],"flags":["f"],'
+          '"options":{"o":"v","h":["1","2"]},"properties":{"p":"1"}}',
+        ),
+      );
 
       (json['arguments'] as List).add('b');
+      (json['flags'] as List).add('g');
+      ((json['options'] as Map)['h'] as List).add('3');
       expect(args.arguments, equals(['a']));
+      expect(args.flags, equals({'f'}));
+      expect(args.optionAsList('h'), equals(['1', '2']));
+    });
+
+    test('toJson -> fromJson round-trips', () {
+      // Regression: `fromJson(Map)` used to read only options.
+      var inputs = [
+        ['a', '-f', '--o', 'v', '--h', '1', '--h', '2', '-Pp=1', '--', '-x'],
+        ['-only-flag'],
+        ['--o=1'],
+        ['-Pk=v'],
+        ['arg'],
+      ];
+      for (var input in inputs) {
+        var a = ArgsSimple.parse(input);
+        for (var b in [
+          ArgsSimple.fromJson(a.toJson()),
+          ArgsSimple.fromEncodedJson(jsonEncode(a.toJson())),
+        ]) {
+          expect(b.arguments, equals(a.arguments), reason: '$input');
+          expect(b.flags, equals(a.flags), reason: '$input');
+          expect(b.options, equals(a.options), reason: '$input');
+          expect(b.properties, equals(a.properties), reason: '$input');
+          expect(b.toList(), equals(a.toList()), reason: '$input');
+        }
+      }
+    });
+
+    test('fromJson sections: keys normalized, null values become empty', () {
+      var args = ArgsSimple.fromJson({
+        'arguments': [1, 'b', null],
+        'flags': {'Dry-Run'},
+        'options': {
+          'Port': 81,
+          'e': null,
+          'l': ['x', null],
+        },
+        'properties': {'P-K': null},
+      });
+      expect(args.arguments, equals(['1', 'b', '']));
+      expect(args.flags, equals({'dryrun'}));
+      expect(
+        args.options,
+        equals({
+          'port': 81,
+          'e': '',
+          'l': ['x', ''],
+        }),
+      );
+      expect(args.properties, equals({'pk': ''}));
+    });
+
+    test('a Map that is not in the toJson format is read as options', () {
+      // `arguments` with a non-List value, or an unknown key: legacy form.
+      expect(
+        ArgsSimple.fromJson({'arguments': 'x'}).options,
+        equals({'arguments': 'x'}),
+      );
+      expect(
+        ArgsSimple.fromJson({
+          'options': {'a': 1},
+          'port': 81,
+        }).options,
+        equals({
+          'options': {'a': 1},
+          'port': 81,
+        }),
+      );
+      expect(ArgsSimple.fromJson({}).isEmpty, isTrue);
     });
 
     test('fromJson(Map) reads options, null values become empty', () {
@@ -476,6 +751,14 @@ void main() {
       expect(args.optionAsInt('port'), isNull);
       expect(args.optionAsInt('Port'), equals(81));
       expect(args.arguments, isEmpty);
+    });
+
+    test('toList normalizes raw option keys from fromJson(Map)', () {
+      var args = ArgsSimple.fromJson({'Port': 81, 'a=b': 1, '--': 'x'});
+      expect(args.toList(), equals(['--port', '81', '--ab', '1', '--=x']));
+      var back = ArgsSimple.parse(args.toList());
+      expect(back.options, equals({'port': '81', 'ab': '1', '': 'x'}));
+      expect(back.arguments, isEmpty);
     });
 
     test('fromEncodedJson with a list parses like the command line', () {

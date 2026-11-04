@@ -309,6 +309,7 @@ void main(List<String> argv) {
     'options': args.options,
     'properties': args.properties,
     'toList': args.toList(),
+    'toJson': args.toJson(),
   }));
 }
 ''';
@@ -339,6 +340,7 @@ void main(List<String> argv) {
         'options': args.options,
         'properties': args.properties,
         'toList': args.toList(),
+        'toJson': args.toJson(),
       };
     }
 
@@ -360,8 +362,13 @@ void main(List<String> argv) {
       '  spaced  ',
       '-Purl=http://h:1/?a=b&c=d',
       '-Dlang=日本語',
+      '--port=81',
+      '-Port',
+      '--Ünï',
+      'u',
       '--',
       '-x',
+      '--y=1',
     ];
 
     test('parses argv received by a real process like in-process', () async {
@@ -378,16 +385,25 @@ void main(List<String> argv) {
           '',
           '-5',
           '-1.5',
+          '-x',
+          '--y=1',
         ]),
       );
-      expect(out['flags'], equals(['v']));
+      expect(out['flags'], equals(['v', 'port']));
       expect(
         out['options'],
         equals({
           'host': ['a', 'b=c'],
           'msg': '  spaced  ',
-          '': '-x',
+          'port': '81',
+          'ünï': 'u',
         }),
+      );
+      // Arguments starting with `-` are emitted after `--`:
+      var list = (out['toList'] as List).cast<String>();
+      expect(
+        list.sublist(list.indexOf('--')),
+        equals(['--', ...?out['arguments']]),
       );
       expect(
         out['properties'],
@@ -404,6 +420,10 @@ void main(List<String> argv) {
       expect(second['options'], equals(first['options']));
       expect(second['properties'], equals(first['properties']));
       expect(second['toList'], equals(first['toList']));
+      expect(second['toJson'], equals(first['toJson']));
+
+      var fromJson = ArgsSimple.fromJson(first['toJson'] as Map);
+      expect(fromJson.toList(), equals(first['toList']));
     });
 
     test('no arguments', () async {
@@ -416,6 +436,7 @@ void main(List<String> argv) {
           'options': {},
           'properties': {},
           'toList': [],
+          'toJson': {},
         }),
       );
     });

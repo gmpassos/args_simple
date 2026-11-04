@@ -69,6 +69,30 @@ void main(List<String> argsOrig) {
 }
 ```
 
+## Parsing rules
+
+`ArgsSimple.parse` reads each element of the command line as:
+
+| Input                          | Parsed as                                                                              |
+|--------------------------------|----------------------------------------------------------------------------------------|
+| `--`                           | End of options: every following element is an argument, even if it starts with `-`.   |
+| `--key=value`                  | Option `key` = `value` (split on the first `=`; the value may be empty or contain `=`). |
+| `--key value`                  | Option `key` = `value`. The next element is always the value (a trailing `--key` gets `''`). |
+| `-Dkey=value`, `-Pkey=value`   | Property `key` = `value` (Java-style; split on the first `=` or `:`).                  |
+| `-name`                        | Flag `name` (including `-Debug`/`-Port`: `-D`/`-P` without `=`/`:` is a flag).         |
+| `-1`, `-1.5`, `-1e3`           | Argument (a negative number).                                                          |
+| anything else                  | Argument.                                                                              |
+
+- An option given more than once is stored as a `List` of its values.
+- `--flag=true` is an option, not a flag: read it with `optionAsBool`
+  (for example `args.flagOr('verbose', null) ?? args.optionAsBool('verbose') ?? false`).
+- Keys are normalized by `ArgsSimple.normalizeKey`: lower-cased, keeping only
+  Unicode letters, marks and digits. So `--sys-config`, `--sys_config` and
+  `--SysConfig` are the same option, and `--Ünïcode` is `ünïcode`.
+- `toList()` gives a command line that `parse` reads back to the same values
+  (arguments that start with `-` are emitted after `--`), and
+  `toJson()`/`fromJson()` round-trip through `jsonEncode`/`jsonDecode`.
+
 ## Source
 
 The official source code is [hosted @ GitHub][github_args_simple]:

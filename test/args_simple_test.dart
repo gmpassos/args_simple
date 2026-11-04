@@ -42,7 +42,7 @@ void main() {
         '-X',
         '-y',
         '-PZzz=WWW',
-        '-DeA',
+        '-DeA=',
       ]);
       expect(args.arguments, equals(['a', '456']));
       expect(args.options, equals({'b': '123'}));
@@ -58,7 +58,7 @@ void main() {
         args.toJson(),
         equals({
           'arguments': ['a', '456'],
-          'flags': {'x', 'y'},
+          'flags': ['x', 'y'],
           'options': {'b': '123'},
           'properties': {'zzz': 'WWW', 'ea': ''},
         }),

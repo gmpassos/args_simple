@@ -34,6 +34,33 @@ void main() {
       expect(TypeParser.parserFor<Map>()!('a=1'), equals({'a': '1'}));
     });
 
+    test('by nullable type argument', () {
+      // Regression: no parser was found for nullable types.
+      expect(TypeParser.parserFor<String?>(), equals(TypeParser.parseString));
+      expect(TypeParser.parserFor<int?>(), equals(TypeParser.parseInt));
+      expect(TypeParser.parserFor<double?>(), equals(TypeParser.parseDouble));
+      expect(TypeParser.parserFor<num?>(), equals(TypeParser.parseNum));
+      expect(TypeParser.parserFor<bool?>(), equals(TypeParser.parseBool));
+      expect(TypeParser.parserFor<BigInt?>(), equals(TypeParser.parseBigInt));
+      expect(
+        TypeParser.parserFor<DateTime?>(),
+        equals(TypeParser.parseDateTime),
+      );
+      expect(TypeParser.parserFor<List?>()!('a,b'), equals(['a', 'b']));
+      expect(TypeParser.parserFor<Set?>()!('a,b,a'), equals({'a', 'b'}));
+      expect(TypeParser.parserFor<Map?>()!('a=1'), equals({'a': '1'}));
+      expect(TypeParser.parserFor<_Point?>(), isNull);
+    });
+
+    test('nullable type arguments in the generic accessors', () {
+      var args = ArgsSimple.parse(['7', '--n', '12', '-Pb=yes']);
+      expect(args.argument<int?>(0), equals(7));
+      expect(args.option<int?>('n'), equals(12));
+      expect(args.option<double?>('n'), equals(12.0));
+      expect(args.property<bool?>('b'), isTrue);
+      expect(args.option<int?>('missing'), isNull);
+    });
+
     test('by `type` parameter', () {
       expect(TypeParser.parserFor(type: int), equals(TypeParser.parseInt));
       expect(TypeParser.parserFor(type: bool), equals(TypeParser.parseBool));
@@ -163,11 +190,42 @@ void main() {
     });
 
     test('unparseable value with a non-nullable value type', () {
-      // Current behaviour (pinned): the value parser returns `null` and the
-      // cast to `V` fails.
+      // Regression: used to throw a `TypeError` (`null as int`). The entry is
+      // now skipped, like a key without a value.
+      expect(TypeParser.parseMap<String, int>('a=x'), isEmpty);
+      expect(TypeParser.parseMap<String, int>('a=x;b=2;c=?'), equals({'b': 2}));
       expect(
-        () => TypeParser.parseMap<String, int>('a=x'),
-        throwsA(isA<TypeError>()),
+        TypeParser.parseMap<String, int>({'a': 'x', 'b': '2', 'c': null}),
+        equals({'b': 2}),
+      );
+      expect(
+        TypeParser.parseMap<String, int>([
+          ['a', 'x'],
+          ['b', '2'],
+        ]),
+        equals({'b': 2}),
+      );
+      expect(
+        TypeParser.parseMap<int, String>(
+          '1=a;x=b',
+          keyParser: TypeParser.parseInt,
+        ),
+        equals({1: 'a'}),
+      );
+      // A nullable value type keeps the key, with a `null` value.
+      expect(
+        TypeParser.parseMap<String, int?>('a=x;b=2'),
+        equals({'a': null, 'b': 2}),
+      );
+      // A type without a parser: values of another type are skipped.
+      expect(
+        TypeParser.parseMap<String, List<String>>({
+          'a': 'x',
+          'b': ['y'],
+        }),
+        equals({
+          'b': ['y'],
+        }),
       );
       // An explicit value parser decides how to handle it.
       expect(
@@ -258,6 +316,42 @@ void main() {
         TypeParser.parseMapEntry<String, String>('a', def: def),
         equals(def),
       );
+    });
+
+    test('unparseable key or value returns def', () {
+      // Regression: used to throw a `TypeError` (`null as int`).
+      var def = const MapEntry('d', 0);
+      expect(TypeParser.parseMapEntry<String, int>('a=x'), isNull);
+      expect(
+        TypeParser.parseMapEntry<String, int>('a=x', def: def),
+        equals(def),
+      );
+      expect(
+        TypeParser.parseMapEntry<String, int>(const MapEntry('a', 'x')),
+        isNull,
+      );
+      expect(TypeParser.parseMapEntry<String, int>(['a', 'x']), isNull);
+      expect(
+        TypeParser.parseMapEntry<int, String>(
+          'x=a',
+          def: const MapEntry(0, 'd'),
+          keyParser: TypeParser.parseInt,
+        ),
+        equals(const MapEntry(0, 'd')),
+      );
+      var e = TypeParser.parseMapEntry<String, int?>('a=x')!;
+      expect([e.key, e.value], equals(['a', null]));
+    });
+
+    test('from a short Iterable', () {
+      var def = const MapEntry('d', 0);
+      expect(TypeParser.parseMapEntry<String, int>([], def: def), equals(def));
+      expect(
+        TypeParser.parseMapEntry<String, int>(['a'], def: def),
+        equals(def),
+      );
+      var e = TypeParser.parseMapEntry<String, int?>(['a'])!;
+      expect([e.key, e.value], equals(['a', null]));
     });
 
     test('types without a parser are cast as-is', () {

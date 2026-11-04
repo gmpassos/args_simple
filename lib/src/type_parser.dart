@@ -17,7 +17,25 @@ class TypeParser {
   static bool unregisterParserResolver(TypeParserResolver parserResolver) =>
       _parsersResolvers.remove(parserResolver);
 
+  static Type _typeOf<T>() => T;
+
+  /// The nullable built-in types (`int?`), mapped to their non-nullable type.
+  static final Map<Type, Type> _nonNullableTypes = {
+    _typeOf<String?>(): String,
+    _typeOf<Map?>(): Map,
+    _typeOf<Set?>(): Set,
+    _typeOf<List?>(): List,
+    _typeOf<int?>(): int,
+    _typeOf<double?>(): double,
+    _typeOf<num?>(): num,
+    _typeOf<bool?>(): bool,
+    _typeOf<BigInt?>(): BigInt,
+    _typeOf<DateTime?>(): DateTime,
+  };
+
   /// Returns the parser for the desired type, defined by [T], [obj] or [type].
+  /// - A nullable built-in type (`int?`, `String?`, ...) gets the parser of
+  ///   its non-nullable type.
   static TypeElementParser? parserFor<T>({Object? obj, Type? type}) {
     if (obj != null) {
       if (obj is String) {
@@ -44,6 +62,7 @@ class TypeParser {
     }
 
     type ??= obj?.runtimeType ?? T;
+    type = _nonNullableTypes[type] ?? type;
 
     if (type == String) {
       return parseString;
@@ -154,15 +173,16 @@ class TypeParser {
       return value;
     }
 
-    keyParser ??= parserFor<K>() as TypeElementParser<K>?;
-    keyParser ??= (k) => k as K;
-
-    valueParser ??= parserFor<V>() as TypeElementParser<V>?;
-    valueParser ??= (v) => v as V;
+    keyParser ??= _defaultParser<K>();
+    valueParser ??= _defaultParser<V>();
 
     if (value is Map) {
-      return value.map(
-        (k, v) => MapEntry(keyParser!(k) as K, valueParser!(v) as V),
+      return Map.fromEntries(
+        value.entries
+            .map(
+              (e) => _mapEntry<K, V>(e.key, e.value, keyParser!, valueParser!),
+            )
+            .nonNulls,
       );
     } else if (value is Iterable) {
       return Map.fromEntries(
@@ -197,8 +217,10 @@ class TypeParser {
 
   /// Tries to parse a [MapEntry].
   /// - Returns [def] if [value] is `null` or an empty [String].
-  /// - A [String] key without a value (`'a'`) gives a `null` value when [V]
-  ///   is nullable, otherwise returns [def].
+  /// - A key or value that is missing (`'a'`) or can't be parsed
+  ///   (`parseMapEntry<String, int>('a=x')`) gives `null`, kept only when its
+  ///   type ([K] or [V]) is nullable; otherwise returns [def] (and `parseMap`
+  ///   skips the entry).
   static MapEntry<K, V>? parseMapEntry<K, V>(
     Object? value, {
     MapEntry<K, V>? def,
@@ -211,18 +233,17 @@ class TypeParser {
       return value;
     }
 
-    keyParser ??= parserFor<K>() as TypeElementParser<K>?;
-    keyParser ??= (k) => k as K;
+    keyParser ??= _defaultParser<K>();
+    valueParser ??= _defaultParser<V>();
 
-    valueParser ??= parserFor<V>() as TypeElementParser<V>?;
-    valueParser ??= (v) => v as V;
-
+    MapEntry<K, V>? entry;
     if (value is MapEntry) {
-      return MapEntry(keyParser(value.key) as K, valueParser(value.value) as V);
+      entry = _mapEntry(value.key, value.value, keyParser, valueParser);
     } else if (value is Iterable) {
-      var k = value.elementAt(0);
-      var v = value.elementAt(1);
-      return MapEntry(keyParser(k) as K, valueParser(v) as V);
+      if (value.isEmpty) return def;
+      var k = value.first;
+      var v = value.length > 1 ? value.elementAt(1) : null;
+      entry = _mapEntry(k, v, keyParser, valueParser);
     } else {
       var s = '$value'.trim();
       if (s.isEmpty) return def;
@@ -231,16 +252,35 @@ class TypeParser {
       if (delimiter != null) {
         var k = s.substring(0, delimiter.start);
         var v = s.substring(delimiter.end);
-        return MapEntry(keyParser(k) as K, valueParser(v) as V);
+        entry = _mapEntry(k, v, keyParser, valueParser);
+      } else {
+        // A key without a value.
+        entry = _mapEntry(s, null, keyParser, valueParser);
       }
-      // A key without a value: only representable when `V` is nullable.
-      // Otherwise return [def] (`parseMap` skips the entry) instead of
-      // failing with a `TypeError` on `null as V`.
-      if (null is V) {
-        return MapEntry(keyParser(s) as K, null as V);
-      }
-      return def;
     }
+
+    return entry ?? def;
+  }
+
+  /// The parser for [T] or, if none, a cast that gives `null` (instead of
+  /// throwing a `TypeError`) for a value that is not a [T].
+  static TypeElementParser<T> _defaultParser<T>() =>
+      parserFor<T>() as TypeElementParser<T>? ?? (o) => o is T ? o : null;
+
+  /// Parses a key and a value into a [MapEntry]. Returns `null` when the
+  /// parsed key or value is `null` and its type is not nullable (instead of
+  /// failing with a `TypeError` on `null as K`/`null as V`).
+  static MapEntry<K, V>? _mapEntry<K, V>(
+    Object? k,
+    Object? v,
+    TypeElementParser<K> keyParser,
+    TypeElementParser<V> valueParser,
+  ) {
+    var key = keyParser(k);
+    if (key is! K) return null;
+    var val = valueParser(v);
+    if (val is! V) return null;
+    return MapEntry(key, val);
   }
 
   /// Tries to parse a [String].
