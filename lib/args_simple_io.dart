@@ -1,5 +1,5 @@
 /// Simple argument parser library integrated with `dart:io`.
-library args_simple.io;
+library;
 
 export 'args_simple.dart';
 export 'src/args_simple_io.dart';

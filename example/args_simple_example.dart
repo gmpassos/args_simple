@@ -12,7 +12,8 @@ void main(List<String> argsOrig) {
 
   if (args.isEmpty) {
     print(
-        'USAGE: [%configFile.json] [%user] [--port] [--sys-config %systemConfig] [-verbose]');
+      'USAGE: [%configFile.json] [%user] [--port] [--sys-config %systemConfig] [-verbose]',
+    );
     exit(0);
   }
 
@@ -26,7 +27,9 @@ void main(List<String> argsOrig) {
 
   // Option `sys-config` is a `Directory`:
   var systemConfigDir = args.optionAsDirectory(
-      'sys-config', Directory('/default/sys-config-dir'))!;
+    'sys-config',
+    Directory('/default/sys-config-dir'),
+  )!;
 
   // Option `--port` is a `int`, with 8080 as default:
   var port = args.optionAsInt('port', 8080);

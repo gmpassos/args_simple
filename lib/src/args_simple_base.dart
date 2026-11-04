@@ -40,7 +40,8 @@ class ArgsSimple {
 
     if (json is Map) {
       args._options.addAll(
-          json.map((key, value) => MapEntry(key.toString(), value ?? '')));
+        json.map((key, value) => MapEntry(key.toString(), value ?? '')),
+      );
     } else {
       var s = '$json';
       args._arguments.add(s);
@@ -286,11 +287,11 @@ class ArgsSimple {
   }
 
   Map<String, Object> toJson() => {
-        if (_arguments.isNotEmpty) 'arguments': [..._arguments],
-        if (_flags.isNotEmpty) 'flags': {..._flags},
-        if (_options.isNotEmpty) 'options': {..._options},
-        if (_properties.isNotEmpty) 'properties': {..._properties},
-      };
+    if (_arguments.isNotEmpty) 'arguments': [..._arguments],
+    if (_flags.isNotEmpty) 'flags': {..._flags},
+    if (_options.isNotEmpty) 'options': {..._options},
+    if (_properties.isNotEmpty) 'properties': {..._properties},
+  };
 
   @override
   String toString() => toList().toString();

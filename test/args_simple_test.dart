@@ -34,24 +34,35 @@ void main() {
     });
 
     test('with properties', () {
-      var args = ArgsSimple.parse(
-          ['a', '--B', '123', '456', '-X', '-y', '-PZzz=WWW', '-DeA']);
+      var args = ArgsSimple.parse([
+        'a',
+        '--B',
+        '123',
+        '456',
+        '-X',
+        '-y',
+        '-PZzz=WWW',
+        '-DeA',
+      ]);
       expect(args.arguments, equals(['a', '456']));
       expect(args.options, equals({'b': '123'}));
       expect(args.flags, equals({'x', 'y'}));
       expect(args.properties, equals({'zzz': 'WWW', 'ea': ''}));
 
-      expect(args.toList(),
-          equals(['a', '456', '-x', '-y', '--b', '123', '-Pzzz=WWW', '-Pea=']));
+      expect(
+        args.toList(),
+        equals(['a', '456', '-x', '-y', '--b', '123', '-Pzzz=WWW', '-Pea=']),
+      );
 
       expect(
-          args.toJson(),
-          equals({
-            'arguments': ['a', '456'],
-            'flags': {'x', 'y'},
-            'options': {'b': '123'},
-            'properties': {'zzz': 'WWW', 'ea': ''}
-          }));
+        args.toJson(),
+        equals({
+          'arguments': ['a', '456'],
+          'flags': {'x', 'y'},
+          'options': {'b': '123'},
+          'properties': {'zzz': 'WWW', 'ea': ''},
+        }),
+      );
     });
 
     test('with File', () {
@@ -97,11 +108,14 @@ void main() {
       expect(args.argumentAsString(1, 'guest'), 'guest');
 
       expect(
-          args
-              .propertyAsDirectory(
-                  'sys-config', Directory('/default/sys-config-dir'))!
-              .path,
-          endsWith('sys-config-dir'));
+        args
+            .propertyAsDirectory(
+              'sys-config',
+              Directory('/default/sys-config-dir'),
+            )!
+            .path,
+        endsWith('sys-config-dir'),
+      );
 
       expect(args.optionAsInt('port', 8080), equals(81));
 
@@ -123,11 +137,14 @@ void main() {
       expect(args.argumentAsString(1, 'guest'), 'root');
 
       expect(
-          args
-              .propertyAsDirectory(
-                  'sys-config', Directory('/default/sys-config-dir'))!
-              .path,
-          endsWith('sys-config-dir'));
+        args
+            .propertyAsDirectory(
+              'sys-config',
+              Directory('/default/sys-config-dir'),
+            )!
+            .path,
+        endsWith('sys-config-dir'),
+      );
 
       expect(args.optionAsInt('port', 8080), equals(8080));
 
@@ -135,8 +152,9 @@ void main() {
     });
 
     test('parse 2', () {
-      var args =
-          ArgsSimple.parse('file.json -Psys-config=/etc'.split(RegExp(r'\s+')));
+      var args = ArgsSimple.parse(
+        'file.json -Psys-config=/etc'.split(RegExp(r'\s+')),
+      );
       print(args);
 
       expect(args.isNotEmpty, isTrue);
@@ -150,11 +168,14 @@ void main() {
       expect(args.argumentAsString(1, 'guest'), 'guest');
 
       expect(
-          args
-              .propertyAsDirectory(
-                  'sys-config', Directory('/default/sys-config-dir'))!
-              .path,
-          endsWith('etc'));
+        args
+            .propertyAsDirectory(
+              'sys-config',
+              Directory('/default/sys-config-dir'),
+            )!
+            .path,
+        endsWith('etc'),
+      );
 
       expect(args.optionAsInt('port', 8080), equals(8080));
 

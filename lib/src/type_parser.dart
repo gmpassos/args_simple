@@ -1,9 +1,10 @@
-import 'package:collection/collection.dart';
-
 typedef TypeElementParser<T> = T? Function(Object? o);
 
-typedef TypeParserResolver = TypeElementParser? Function(
-    {Type? t, Object? obj, Type? type});
+typedef TypeParserResolver = TypeElementParser? Function({
+  Type? t,
+  Object? obj,
+  Type? type,
+});
 
 /// Lenient parsers for basic Dart types.
 class TypeParser {
@@ -79,8 +80,11 @@ class TypeParser {
   /// Tries to parse a [List].
   /// - Returns [def] if [value] is `null` or an empty [String].
   /// - [elementParser] is an optional parser for the elements of the parsed [List].
-  static List<T>? parseList<T>(Object? value,
-      {List<T>? def, TypeElementParser<T>? elementParser}) {
+  static List<T>? parseList<T>(
+    Object? value, {
+    List<T>? def,
+    TypeElementParser<T>? elementParser,
+  }) {
     if (value == null) return def;
 
     var l = _parseListImpl(value);
@@ -124,8 +128,11 @@ class TypeParser {
   /// Tries to parse a [Set].
   ///
   /// See [parseList].
-  static Set<T>? parseSet<T>(Object? value,
-      {Set<T>? def, TypeElementParser<T>? elementParser}) {
+  static Set<T>? parseSet<T>(
+    Object? value, {
+    Set<T>? def,
+    TypeElementParser<T>? elementParser,
+  }) {
     var l = parseList<T>(value, elementParser: elementParser);
     return l?.toSet() ?? def;
   }
@@ -135,10 +142,12 @@ class TypeParser {
 
   /// Tries to parse a [Map].
   /// - Returns [def] if [value] is `null` or an empty [String].
-  static Map<K, V>? parseMap<K, V>(Object? value,
-      {Map<K, V>? def,
-      TypeElementParser<K>? keyParser,
-      TypeElementParser<V>? valueParser}) {
+  static Map<K, V>? parseMap<K, V>(
+    Object? value, {
+    Map<K, V>? def,
+    TypeElementParser<K>? keyParser,
+    TypeElementParser<V>? valueParser,
+  }) {
     if (value == null) return def;
 
     if (value is Map<K, V>) {
@@ -152,31 +161,48 @@ class TypeParser {
     valueParser ??= (v) => v as V;
 
     if (value is Map) {
-      return value
-          .map((k, v) => MapEntry(keyParser!(k) as K, valueParser!(v) as V));
+      return value.map(
+        (k, v) => MapEntry(keyParser!(k) as K, valueParser!(v) as V),
+      );
     } else if (value is Iterable) {
-      return Map.fromEntries(value
-          .map((e) => parseMapEntry<K, V>(e,
-              keyParser: keyParser, valueParser: valueParser))
-          .whereNotNull());
+      return Map.fromEntries(
+        value
+            .map(
+              (e) => parseMapEntry<K, V>(
+                e,
+                keyParser: keyParser,
+                valueParser: valueParser,
+              ),
+            )
+            .nonNulls,
+      );
     } else {
       var s = '$value'.trim();
       if (s.isEmpty) return def;
 
       var pairs = s.split(_regexpPairDelimiter);
-      return Map.fromEntries(pairs
-          .map((e) => parseMapEntry<K, V>(e,
-              keyParser: keyParser, valueParser: valueParser))
-          .whereNotNull());
+      return Map.fromEntries(
+        pairs
+            .map(
+              (e) => parseMapEntry<K, V>(
+                e,
+                keyParser: keyParser,
+                valueParser: valueParser,
+              ),
+            )
+            .nonNulls,
+      );
     }
   }
 
   /// Tries to parse a [MapEntry].
   /// - Returns [def] if [value] is `null` or an empty [String].
-  static MapEntry<K, V>? parseMapEntry<K, V>(Object? value,
-      {MapEntry<K, V>? def,
-      TypeElementParser<K>? keyParser,
-      TypeElementParser<V>? valueParser}) {
+  static MapEntry<K, V>? parseMapEntry<K, V>(
+    Object? value, {
+    MapEntry<K, V>? def,
+    TypeElementParser<K>? keyParser,
+    TypeElementParser<V>? valueParser,
+  }) {
     if (value == null) return def;
 
     if (value is MapEntry<K, V>) {
